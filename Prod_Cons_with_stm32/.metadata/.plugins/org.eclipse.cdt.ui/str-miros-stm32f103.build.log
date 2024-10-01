@@ -1,0 +1,10 @@
+08:50:05 **** Incremental Build of configuration Debug for project str-miros-stm32f103 ****
+make -j8 all 
+arm-none-eabi-size  str-miros-stm32f103.elf 
+   text	   data	    bss	    dec	    hex	filename
+   2472	     16	   1736	   4224	   1080	str-miros-stm32f103.elf
+Finished building: default.size.stdout
+ 
+
+08:50:07 Build Finished. 0 errors, 0 warnings. (took 2s.421ms)
+

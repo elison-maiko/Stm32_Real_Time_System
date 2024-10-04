@@ -33,6 +33,7 @@
 #include "miros.h"
 #include "qassert.h"
 #include "stm32f1xx.h"
+#include <stddef.h>
 
 Q_DEFINE_THIS_FILE
 
@@ -192,7 +193,8 @@ void OSThread_start(
 
 
 void sem_init(semaphore_t *p_sem, uint8_t valor_init) {
-		p_sem->valor_sem = valor_init;
+	Q_ASSERT(p_sem != NULL);
+	p_sem->valor_sem = valor_init;
 	/* valor_init da criação do semaforo é atribuido a variavel valor_sem, da struct*/
 }
 

@@ -42,7 +42,6 @@ typedef struct {
 
 typedef struct{
 	uint8_t valor_sem;
-	/*uint32_t buffer;*/
 } semaphore_t;
 
 #define TICKS_PER_SEC 100U

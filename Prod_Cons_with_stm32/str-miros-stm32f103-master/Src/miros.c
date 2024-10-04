@@ -206,7 +206,7 @@ void sem_post(semaphore_t *p_sem){
 
 void sem_wait(semaphore_t *p_sem){
 	__disable_irq();
-	while(p_sem->valor_sem == 0){ /*Enquanto o valor do semaforo for 0 não é possivel decrementar*/
+	while(p_sem->valor_sem <= 0){ /*Enquanto o valor do semaforo for 0 não é possivel decrementar*/
 		__enable_irq();
 		OS_delay(1U); /*Reabilita a interrupção e gera delay para outra thread incrementar o valor do semaforo*/
 		__disable_irq(); /*disabilita interrupção para outra verificação do while*/

@@ -1,4 +1,4 @@
-# Stm32_Real_Time_System##
+# Stm32_Real_Time_System
 Disciplina de Engenharia Mecatrônica
     EMB5633-06605 (20242) - Sistemas de Tempo Real
 

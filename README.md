@@ -5,38 +5,78 @@ Disciplina de Engenharia Mecatrônica
 Discente: Elison Maiko Oliveira de Souza
 Matrícula: 22102900
 
-Sobre as alterações no código:
+---
 
-Inicialmente foi declarado na mirroh.h, 4 funções novas: 
+## Sobre as Alterações no Código
+Inicialmente, foram declaradas na mirroh.h quatro novas funções:
 
-struct semaphore_t: contento apenas uma definição em seu escopo, referente ao valor inicial do semaforo
+- 1. `struct semaphore_t`
+    Contém apenas uma definição em seu escopo, referente ao valor inicial do semáforo.
+	uint8_t valor_sem;
 
-sem_init(semaphore_t *p_sem, uint8_t valor_init): 
-    Responsável pela iniciação do semáforo
+- 2. `sem_init(semaphore_t *p_sem, uint8_t valor_init)`
+    Responsável pela iniciação do semáforo.
 
-sem_post(): 
-    Responsável por adicionar itens ao buffer, referente ao produtor
+- 3. `sem_post(semaphore_t *p_sem)`
+    Responsável por adicionar itens ao buffer, referente ao produtor.
 
-sem_wait():
-    Responsável por retirar itens do buffer, referente ao consumidor   
+- 4. `sem_wait(semaphore_t *p_sem)`
+    Responsável por retirar itens do buffer, referente ao consumidor.
 
-Em seguida a implementação das 3 funções do semáforo foram realizadas na mirror.c:
+---
 
+## Implementação das Funções de Semáforo
+Em seguida, a implementação das três funções do semáforo foi realizada na mirror.c:
 
-sem_init(semaphore_t *p_sem, uint8_t valor_init):
-     Define o valor inicial do semáforo, que será utilizado para controlar a quantidade de recursos disponíveis. Isso é fundamental para garantir que o sistema comece com o estado correto.
+- 1. `sem_init(semaphore_t *p_sem, uint8_t valor_init)`
+    Define o valor inicial do semáforo, que será utilizado para controlar a quantidade de recursos disponíveis. Isso é fundamental para garantir que o sistema comece com o estado correto.
 
-sem_post(semaphore_t *p_sem):
-    Essa função é chamada pelo produtor. Ela incrementa o valor do semáforo, indicando que um recurso (ou item no buffer) foi produzido e está disponível para o consumidor.
-    A função garante que a operação ocorra sem interrupções ao desabilitar as interrupções __disable_irq() enquanto incrementa o valor do semáforo e reabilitar logo após a operação com __enable_irq().
+- 2. `sem_post(semaphore_t *p_sem)`
+    Essa função é chamada pelo produtor. Ela incrementa o valor do semáforo, indicando que um recurso (ou item no buffer) foi produzido e está disponível para o consumidor. A função garante que a operação ocorra sem interrupções ao desabilitar as interrupções com __disable_irq() enquanto incrementa o valor do semáforo e reabilita logo após a operação com __enable_irq().
 
-sem_wait(semaphore_t *p_sem):
-    Essa função é chamada pelo consumidor. Ela decrementa o valor do semáforo, indicando que um recurso foi consumido. Caso o valor do semáforo seja zero, o consumidor entra em espera até que o produtor adicione um novo recurso.
-    Assim como no sem_post(), as interrupções são desabilitadas ao realizar a operação para garantir a integridade dos dados. A função também realiza um bloqueio, forçando a thread a esperar (OS_delay()) enquanto o valor do semáforo é zero.
+- 3. `sem_wait(semaphore_t *p_sem)`
+    Essa função é chamada pelo consumidor. Ela decrementa o valor do semáforo, indicando que um recurso foi consumido. Caso o valor do semáforo seja zero, o consumidor entra em espera até que o produtor adicione um novo recurso. Assim como no sem_post(), as interrupções são desabilitadas ao realizar a operação para garantir a integridade dos dados. A função também realiza um bloqueio, forçando a thread a esperar (com OS_delay()) enquanto o valor do semáforo é zero.
 
-Threads Produtor-Consumidor
-    No conceito de produtor-consumidor, duas threads trabalham em conjunto para gerenciar um buffer de recursos:
+---
 
-    Produtor: Cria novos recursos e usa sem_post() para indicar que o recurso está disponível no buffer.
+## Estrutura do Código
 
-    Consumidor: Consome os recursos e utiliza sem_wait() para garantir que haja recursos disponíveis antes de consumir.
+### Constantes
+
+- `bufferCapacity`: Define a capacidade máxima do buffer (25).
+- `initial_Cons`: Define o valor inicial de consumo (0).
+- `prod_Time`: Tempo necessário para produzir um item (40).
+- `cons_Time`: Tempo necessário para consumir um item (80).
+- `breaktime_Cons`: Intervalo entre consumos (100).
+- `breaktime_Prod`: Intervalo entre produções (70).
+
+### Variáveis Globais
+
+- `semaphore_t buffer_prod`: Semáforo para controlar o espaço disponível para produção.
+- `semaphore_t buffer_cons`: Semáforo para controlar os itens prontos para consumo.
+
+### Funções
+
+#### `produtor()`
+
+- Simula a função do produtor.
+- Utiliza `sem_wait(&buffer_prod)` para aguardar espaço disponível no buffer.
+- Chama `OS_delay(prod_Time)` para simular o tempo de produção.
+- Usa `sem_post(&buffer_cons)` para sinalizar que um item foi produzido.
+- Aguarda um intervalo fixo antes de produzir o próximo item.
+
+#### `consumidor()`
+
+- Simula a função do consumidor.
+- Utiliza `sem_wait(&buffer_cons)` para aguardar um item disponível.
+- Chama `OS_delay(cons_Time)` para simular o tempo de consumo.
+- Usa `sem_post(&buffer_prod)` para sinalizar que um espaço foi liberado.
+- Aguarda um intervalo fixo antes de consumir o próximo item.
+
+#### `main()`
+
+- Inicializa a pilha do thread inativo.
+- Chama `OS_init()` para inicializar o sistema operacional.
+- Inicializa os semáforos `buffer_prod` e `buffer_cons` com seus respectivos valores.
+- Cria as threads para o produtor e o consumidor.
+- Inicia o sistema operacional com `OS_run()`.

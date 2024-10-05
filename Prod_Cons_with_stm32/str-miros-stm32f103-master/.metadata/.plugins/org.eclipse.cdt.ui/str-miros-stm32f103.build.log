@@ -1,4 +1,4 @@
-22:00:47 **** Build of configuration Debug for project str-miros-stm32f103 ****
+22:08:16 **** Build of configuration Debug for project str-miros-stm32f103 ****
 make -j8 all 
 arm-none-eabi-gcc -mcpu=cortex-m3 -g3 -DDEBUG -c -x assembler-with-cpp -MMD -MP -MF"Startup/startup_stm32f103c8tx.d" -MT"Startup/startup_stm32f103c8tx.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Startup/startup_stm32f103c8tx.o" "../Startup/startup_stm32f103c8tx.s"
 arm-none-eabi-gcc "../Src/main.c" -mcpu=cortex-m3 -std=gnu11 -g3 -DDEBUG -DSTM32 -DSTM32F1 -DSTM32F103C8Tx -c -I"C:/Users/Elison Maiko/OneDrive/Documentos/Project_0/Stm32/pro_consu_cod/Drivers/STM32F1xx_HAL_Driver/Inc" -I"C:/Users/Elison Maiko/OneDrive/Documentos/Project_0/Stm32/pro_consu_cod/Drivers/CMSIS/Device/ST/STM32F1xx/Include" -I"C:/Users/Elison Maiko/OneDrive/Documentos/Project_0/Stm32/pro_consu_cod/Drivers/CMSIS/Include" -I"C:/Users/Elison Maiko/OneDrive/Documentos/Project_0/Stm32/pro_consu_cod/Inc" -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Src/main.d" -MT"Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Src/main.o"
@@ -86,5 +86,5 @@ Finished building: str-miros-stm32f103.bin
  
  
 
-22:01:36 Build Finished. 0 errors, 1 warnings. (took 49s.231ms)
+22:09:03 Build Finished. 0 errors, 1 warnings. (took 46s.799ms)
 

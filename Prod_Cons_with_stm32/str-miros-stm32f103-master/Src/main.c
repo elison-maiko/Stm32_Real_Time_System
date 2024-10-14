@@ -1,5 +1,5 @@
-#include <stdint.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include "miros.h"
 
 #define STACK_SIZE 40  /* Tamanho da pilha para cada thread */

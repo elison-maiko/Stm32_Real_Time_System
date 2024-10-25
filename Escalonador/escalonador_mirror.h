@@ -29,22 +29,35 @@
 * Git repo:
 * https://github.com/QuantumLeaps/MiROS
 ****************************************************************************/
+#include <cstdint>
 #ifndef MIROS_H
 #define MIROS_H
+#define TICKS_PER_SEC 100U
 
 /* Thread Control Block (TCB) */
 typedef struct {
     void *sp; /* stack pointer */
     uint32_t timeout; /* timeout delay down-counter */
     uint8_t prio; /* thread priority */
-    /* ... other attributes associated with a thread */
+    TaskParamets paramets /* ... other attributes associated with a thread */
 } OSThread;
 
-typedef struct{
-	uint8_t valor_sem;
-} semaphore_t;
 
-#define TICKS_PER_SEC 100U
+// -------------- Implementation of Scheduling Rate Monotonic --------------------
+
+typedef struct{
+	uint32_t cost_abs;
+    uint32_t cost_relative;
+	uint32_t deadline_abs;
+    uint32_t deadline_relative;
+    uint32_t period_abs;
+    uint32_t period_relative;
+} TaskParamets;                          // Definição da estrutura d
+
+
+void schedulability(TaskParamets task, uint8_t Ntasks);
+
+// ---------------------------------------------------------------------------------
 
 typedef void (*OSThreadHandler)();
 
@@ -74,18 +87,15 @@ void OSThread_start(
     OSThreadHandler threadHandler,
     void *stkSto, uint32_t stkSize);
 
-/* ---------- Definicções do semaforo ----------*/
+/* ------------------------- SEMAPHORE --------------------------*/
 
 void sem_init(semaphore_t *p_sem, uint8_t valor_init); /* Ponteiro p/ semaforo e o valor de inicio*/
 void sem_post(semaphore_t *p_sem);
 void sem_wait(semaphore_t *p_sem);
 
 typedef struct{
-	uint32_t cost_absolute;
-	uint32_t 
-}
-
-void schedulability(VER AINDA);
+	uint8_t valor_sem;
+} semaphore_t;
 
 
 #endif /* MIROS_H */

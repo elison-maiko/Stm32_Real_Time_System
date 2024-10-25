@@ -53,9 +53,19 @@ void main_idleThread() {
     }
 }
 
-void schedulability (Dados_task){
-	
+
+void schedulability(TaskParamets task, uint8_t Ntasks){
+	float sum =  0.0;
+
+    for (int i=0; i < Ntasks; i++)
+        sum = (float) (task[i].cost_abs / task[i].period_abs); //calcula U
+    
+    if (sum > 1)
+        return 1;
+    else return 0;
+    //Continuar calculos de escalonabilidade assim que acabar o principal
 }
+
 
 void OS_init(void *stkSto, uint32_t stkSize) {
     /* set the PendSV interrupt priority to the lowest level 0xFF */
@@ -195,6 +205,7 @@ void OSThread_start(
     }
 }
 
+// ------------------------------ SEMAPHORE ------------------------------
 
 void sem_init(semaphore_t *p_sem, uint8_t valor_init) {
 	Q_ASSERT(p_sem != NULL); //Verifica se o ponteiro é válido ou nulo
@@ -220,6 +231,7 @@ void sem_wait(semaphore_t *p_sem){
 	__enable_irq();
 }
 
+// --------------------------- END SEMAPHORE -----------------------------
 
 __attribute__ ((naked, optimize("-fno-stack-protector")))
 void PendSV_Handler(void) {

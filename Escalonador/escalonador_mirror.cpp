@@ -108,6 +108,24 @@ void calcular_mdc_mmc(uint32_t *periodos, uint8_t n, uint32_t *mdc, uint32_t *mm
     }
 }
 
+void OS_redirect_next_task(TaskParamets task, uint8_t Ntasks) {
+    int min_index = -1; // Para armazenar o índice da tarefa com menor período
+    uint32_t min_period = UINT32_MAX; // Inicia com o maior valor possível
+
+    // Procura pela tarefa com o menor período
+    for (int i = 0; i < Ntasks; i++) {
+        // Verifica se o período da tarefa atual é menor que o menor encontrado
+        if (tasks[i].threadCB.TaskParamets.period_relative < min_period) {
+            min_period = tasks[i].threadCB.TaskParamets.period_relative; // Atualiza o menor período
+            min_index = i; // Armazena o índice da tarefa
+        }
+    }
+
+    if (min_index != -1) {
+        thread_running = min_index;  // Atualiza o índice da tarefa com maior prioridade
+    }
+}
+
 
 // ------------------------- END ESPECIFIC FUNCTIONS --------------------------
 

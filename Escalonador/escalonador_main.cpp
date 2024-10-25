@@ -53,7 +53,9 @@ int main() {
 
     for (int i = 0; i < N_TAREFAS; i++) {
         tasks[i].threadCB.TaskParamets.cost_abs = tarefas[i][0];     // Custo
+        tasks[i].threadCB.TaskParamets.cost_relative = tarefas[i][0];     // Custo
         tasks[i].threadCB.TaskParamets.period_abs = tarefas[i][1];   // Período
+        tasks[i].threadCB.TaskParamets.period_relative = tarefas[i][1];   // Período
     }
 
     /* Inicia cada tarefa */
@@ -69,5 +71,12 @@ int main() {
     OS_run();
 }
 
+/*
+Resta faazer:
+    Diminuição dos custos e periodos relativos no tick
+    definir o mmc como tempo de execução
+    redefinir custo e periodo relativo como absoluto assim que zerar
 
+
+*/
 

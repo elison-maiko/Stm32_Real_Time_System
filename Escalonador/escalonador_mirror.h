@@ -56,7 +56,8 @@ typedef struct{
 } TaskParamets;                          // Definição da estrutura d
 
 void calcular_mdc_mmc(uint32_t *periodos, uint8_t n, uint32_t *mdc, uint32_t *mmc)
-void schedulability(TaskParamets task, uint8_t Ntasks);
+//void schedulability(TaskParamets task, uint8_t Ntasks);
+int is_schedulable_RTA(struct TaskParamets tasks[], uint8_t Ntasks)
 void OS_redirect_next_task(TaskParamets task, uint8_t Ntask);
 
 

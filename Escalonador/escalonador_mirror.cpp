@@ -66,7 +66,7 @@ void OS_init(void *stkSto, uint32_t stkSize) {
 }
 
 // --------------------------- IMPLEMENTATION RMA ------------------------------
-
+/*
 void schedulability(TaskParamets task, uint8_t Ntasks){
 	float sum =  0.0;
 
@@ -77,6 +77,24 @@ void schedulability(TaskParamets task, uint8_t Ntasks){
         return 1;
     else return 0;
     //Continuar calculos de escalonabilidade assim que acabar o principal
+}
+*/
+
+int is_schedulable_RTA(struct TaskParamets tasks[], uint8_t Ntasks) {
+    for (int i = 0; i < Ntasks; i++) {
+        uint32_t W = tasks[i].cost_abs;                         // Tempo de resposta inicial é igual ao custo
+        uint32_t W_last = 0;
+                    
+        while (W != W_last) {                                   // Iterativamente calcular W até que ele converja
+            W_last = W;
+            W = tasks[i].cost;                                  // Inicia com o custo da tarefa
+            for (int j = 0; j < i; j++)                         // Somar a interferência das tarefas de maior prioridade
+                W += (W_last / tasks[j].period) * tasks[j].cost;
+            if (W > tasks[i].period)                            // Verifica se o tempo de resposta excede o período (não escalonável)
+                return 0;                                       // Não escalonável
+        }
+    }
+    return 1;  // Todas as tarefas são escalonáveis
 }
 
 // Função para calcular o MDC (Máximo Divisor Comum) e MMC (Mínimo Múltiplo Comum)
@@ -124,7 +142,6 @@ void OS_redirect_next_task(TaskParamets task, uint8_t Ntasks) {
     }
     
     thread_running = min_index;  // Atualiza o índice da tarefa com maior prioridade
-    
 }
 
 

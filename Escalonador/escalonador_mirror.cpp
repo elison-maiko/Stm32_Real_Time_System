@@ -43,6 +43,7 @@ OSThread * volatile OS_next; /* pointer to the next thread to run */
 OSThread *OS_thread[32 + 1]; /* array of threads started so far */
 uint32_t OS_readySet; /* bitmask of threads that are ready to run */
 uint32_t OS_delayedSet; /* bitmask of threads that are delayed */
+uint8_t thread_running = 0;
 
 #define LOG2(x) (32U - __builtin_clz(x))
 
@@ -53,6 +54,18 @@ void main_idleThread() {
     }
 }
 
+void OS_init(void *stkSto, uint32_t stkSize) {
+    /* set the PendSV interrupt priority to the lowest level 0xFF */
+    *(uint32_t volatile *)0xE000ED20 |= (0xFFU << 16);
+
+    /* start idleThread thread */
+    OSThread_start(&idleThread,
+                   0U, /* idle thread priority */
+                   &main_idleThread,
+                   stkSto, stkSize);
+}
+
+// --------------------------- IMPLEMENTATION RMA ------------------------------
 
 void schedulability(TaskParamets task, uint8_t Ntasks){
 	float sum =  0.0;
@@ -66,17 +79,37 @@ void schedulability(TaskParamets task, uint8_t Ntasks){
     //Continuar calculos de escalonabilidade assim que acabar o principal
 }
 
+// Função para calcular o MDC (Máximo Divisor Comum) e MMC (Mínimo Múltiplo Comum)
+void calcular_mdc_mmc(uint32_t *periodos, uint8_t n, uint32_t *mdc, uint32_t *mmc) {
+    // Função auxiliar para calcular o MDC
+    uint32_t gcd(uint32_t a, uint32_t b) {
+        while (b != 0) {
+            uint32_t temp = b;
+            b = a % b;
+            a = temp;
+        }
+        return a;
+    }
 
-void OS_init(void *stkSto, uint32_t stkSize) {
-    /* set the PendSV interrupt priority to the lowest level 0xFF */
-    *(uint32_t volatile *)0xE000ED20 |= (0xFFU << 16);
+    // Inicializando o MDC com o primeiro período
+    *mdc = periodos[0];
 
-    /* start idleThread thread */
-    OSThread_start(&idleThread,
-                   0U, /* idle thread priority */
-                   &main_idleThread,
-                   stkSto, stkSize);
+    // Calculando o MDC de todos os períodos
+    for (uint8_t i = 1; i < n; i++) {
+        *mdc = gcd(*mdc, periodos[i]);
+    }
+
+    // Inicializando o MMC com o primeiro período
+    *mmc = periodos[0];
+
+    // Função auxiliar para calcular o MMC
+    for (uint8_t i = 1; i < n; i++) {
+        *mmc = (*mmc * periodos[i]) / *mdc; // Utiliza o relacionamento entre MMC e MDC
+    }
 }
+
+
+// ------------------------- END ESPECIFIC FUNCTIONS --------------------------
 
 void OS_sched(void) {
     /* choose the next thread to execute... */
@@ -110,6 +143,7 @@ void OS_run(void) {
     OS_onStartup();
 
     __disable_irq();
+    //Adicionar algo para recalcular a task
     OS_sched();
     __enable_irq();
 

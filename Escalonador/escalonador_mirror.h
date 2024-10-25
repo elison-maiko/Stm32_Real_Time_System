@@ -39,6 +39,7 @@ typedef struct {
     void *sp; /* stack pointer */
     uint32_t timeout; /* timeout delay down-counter */
     uint8_t prio; /* thread priority */
+    uint8_t index;  //Indice para tratamento
     TaskParamets paramets /* ... other attributes associated with a thread */
 } OSThread;
 
@@ -54,8 +55,10 @@ typedef struct{
     uint32_t period_relative;
 } TaskParamets;                          // Definição da estrutura d
 
-
+void calcular_mdc_mmc(uint32_t *periodos, uint8_t n, uint32_t *mdc, uint32_t *mmc)
 void schedulability(TaskParamets task, uint8_t Ntasks);
+void redirect(TaskParamets task, uint8_t Ntask);
+
 
 // ---------------------------------------------------------------------------------
 

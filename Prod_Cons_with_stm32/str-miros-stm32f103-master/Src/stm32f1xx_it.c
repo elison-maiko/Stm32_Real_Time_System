@@ -189,6 +189,7 @@ void SysTick_Handler(void)
   /* USER CODE BEGIN SysTick_IRQn 1 */
   OS_tick();
   __disable_irq();
+  OS_redirect_index();
   OS_sched();
   __enable_irq();
   /* USER CODE END SysTick_IRQn 1 */

@@ -44,6 +44,7 @@ OSThread *OS_thread[32 + 1]; /* array of threads started so far */
 uint32_t OS_readySet; /* bitmask of threads that are ready to run */
 uint32_t OS_delayedSet; /* bitmask of threads that are delayed */
 uint8_t thread_running = 0;
+uint8_t qtd_tasks = 0;
 
 #define LOG2(x) (32U - __builtin_clz(x))
 
@@ -97,64 +98,40 @@ int is_schedulable_RTA(struct TaskParamets tasks[], uint8_t Ntasks) {
     return 1;  // Todas as tarefas são escalonáveis
 }
 
-// Função para calcular o MDC (Máximo Divisor Comum) e MMC (Mínimo Múltiplo Comum)
-void calcular_mdc_mmc(uint32_t *periodos, uint8_t n, uint32_t *mdc, uint32_t *mmc) {
-    // Função auxiliar para calcular o MDC
-    uint32_t gcd(uint32_t a, uint32_t b) {
-        while (b != 0) {
-            uint32_t temp = b;
-            b = a % b;
-            a = temp;
-        }
-        return a;
-    }
 
-    // Inicializando o MDC com o primeiro período
-    *mdc = periodos[0];
-
-    // Calculando o MDC de todos os períodos
-    for (uint8_t i = 1; i < n; i++) {
-        *mdc = gcd(*mdc, periodos[i]);
-    }
-
-    // Inicializando o MMC com o primeiro período
-    *mmc = periodos[0];
-
-    // Função auxiliar para calcular o MMC
-    for (uint8_t i = 1; i < n; i++) {
-        *mmc = (*mmc * periodos[i]) / *mdc; // Utiliza o relacionamento entre MMC e MDC
-    }
-}
-
-
-//FUNCAO DA FUNCAO ==== VERIFICAR O MENOR PERIODO ENTRE AS TASKS E TORNAR PRIORIDADE (POR PARA RODAR) O INDICE DA QUE TEM O MENOR PERIODO RELATIVO
-void OS_redirect_next_task(TaskParamets task, uint8_t Ntasks) {
-    int min_index = -1;                                                         // Para armazenar o índice da tarefa com menor período
-    uint32_t min_period = tasks[Ntasks-1].threadCB.TaskParamets.period_relative; // Inicia com o maior valor da última
-
-    // Procura pela tarefa com o menor período
-    for (int i = 0; i < Ntasks; i++) {
-        // Verifica se o período da tarefa atual é menor que o menor encontrado
-        if (tasks[i].threadCB.TaskParamets.period_relative < min_period) {
-            min_period = tasks[i].threadCB.TaskParamets.period_relative; // Atualiza o menor período
-            min_index = i; // Armazena o índice da tarefa
-        }
-    }
+void OS_redirect_index(void) {
+    uint32_t tasks = OS_readySet;
     
-    thread_running = min_index;  // Atualiza o índice da tarefa com maior prioridade
-}
+    while (tasks != 0U) {
+        OSThread *t = OS_thread[LOG2(tasks)];                       // Indice da thread ativa na variáve                       
+        if (t->index == thread_running){
+            t->task_parameters.cost_relative--;    // Decrementa o custo se a tarefa estiver sendo executada
+        }                            
+        t->task_parameters.period_relative--;
 
+        // Verifica se um novo ciclo de período começou
+        if (t->task_parameters.period_dinamic == 0) {
+            // Reinicia os valores dinâmicos a partir dos absolutos
+            t->task_parameters.cost_dinamic = t->task_parameters.cost_absolute;
+            t->task_parameters.deadline_dinamic = t->task_parameters.deadline_absolute;
+            t->task_parameters.period_dinamic = t->task_parameters.period_absolute;
+        }
+
+        // Atualiza a máscara para verificar a próxima tarefa
+        tasks &= ~(1U << (t->index - 1U));
+    }
+}
 
 // ------------------------- END ESPECIFIC FUNCTIONS --------------------------
 
 void OS_sched(void) {
     /* choose the next thread to execute... */
     OSThread *next;
-    if (OS_readySet == 0U) { /* idle condition? */
-        next = OS_thread[0]; /* the idle thread */
+    if ( thread_running == 0U) { /* idle condition? */
+        next = OS_thread[0];    /* the idle thread */
     }
     else {
-        next = OS_thread[LOG2(OS_readySet)];
+        next = OS_thread[thread_running];
         Q_ASSERT(next != (OSThread *)0);
     }
 
@@ -179,7 +156,7 @@ void OS_run(void) {
     OS_onStartup();
 
     __disable_irq();
-    //Adicionar algo para recalcular a task
+    OS_redirect_index();
     OS_sched();
     __enable_irq();
 
@@ -202,6 +179,25 @@ void OS_tick(void) {
         }
         workingSet &= ~bit; /* remove from working set */
     }
+    
+    uint32_t tasks = OS_readySet; 
+    while (tasks != 0U) {
+        OSThread *t = OS_thread[LOG2(tasks)];                       // Obtém a próxima thread a partir do bit set mais alto
+        
+        if (t->index == thread_running){                            // Se a tarefa está em execução, decrementa o custo
+            if (t->TaskParamets.cost_relative > 0)
+                t->TaskParamets.cost_relative--;
+        }
+        if (t->TaskParamets.period_relative > 0)
+            t->TaskParamets.period_relative--;
+        if (t->TaskParamets.period_relative == 0){                  // Reinicia os parâmetros dinâmicos se um novo ciclo de período começou
+            t->TaskParamets.cost_relative = t->TaskParamets.cost_absolute;
+            t->TaskParamets.period_relative = t->TaskParamets.period_absolute;
+        }
+        tasks &= ~(1U << (t->index - 1U));                          // Atualiza a máscara para verificar a próxima tarefa
+    }
+
+
 }
 
 void OS_delay(uint32_t ticks) {

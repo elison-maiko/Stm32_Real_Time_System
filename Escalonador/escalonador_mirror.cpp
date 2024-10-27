@@ -43,8 +43,6 @@ OSThread * volatile OS_next; /* pointer to the next thread to run */
 OSThread *OS_thread[32 + 1]; /* array of threads started so far */
 uint32_t OS_readySet; /* bitmask of threads that are ready to run */
 uint32_t OS_delayedSet; /* bitmask of threads that are delayed */
-uint8_t thread_running = 0;
-uint8_t qtd_tasks = 0;
 
 #define LOG2(x) (32U - __builtin_clz(x))
 
@@ -67,81 +65,44 @@ void OS_init(void *stkSto, uint32_t stkSize) {
 }
 
 // --------------------------- IMPLEMENTATION RMA ------------------------------
-/*
-void schedulability(TaskParamets task, uint8_t Ntasks){
-	float sum =  0.0;
 
-    for (int i=0; i < Ntasks; i++)
-        sum = (float) (task[i].cost_abs / task[i].period_abs); //calcula U
-    
-    if (sum > 1)
-        return 1;
-    else return 0;
-    //Continuar calculos de escalonabilidade assim que acabar o principal
-}
-*/
-
-int is_schedulable_RTA(struct TaskParamets tasks[], uint8_t Ntasks) {
+int is_schedulable_RTA(TaskParamets tasks[], uint8_t Ntasks) {
     for (int i = 0; i < Ntasks; i++) {
         uint32_t W = tasks[i].cost_abs;                         // Tempo de resposta inicial é igual ao custo
         uint32_t W_last = 0;
-                    
+
         while (W != W_last) {                                   // Iterativamente calcular W até que ele converja
             W_last = W;
-            W = tasks[i].cost;                                  // Inicia com o custo da tarefa
+            W = tasks[i].cost_abs;                                  // Inicia com o custo da tarefa
             for (int j = 0; j < i; j++)                         // Somar a interferência das tarefas de maior prioridade
-                W += (W_last / tasks[j].period) * tasks[j].cost;
-            if (W > tasks[i].period)                            // Verifica se o tempo de resposta excede o período (não escalonável)
+                W += (W_last / tasks[j].period_abs) * tasks[j].cost_abs;
+            if (W > tasks[i].period_abs)                            // Verifica se o tempo de resposta excede o período (não escalonável)
                 return 0;                                       // Não escalonável
         }
     }
     return 1;  // Todas as tarefas são escalonáveis
 }
-
-
-void OS_redirect_index(void) {
-    uint32_t tasks = OS_readySet;
-    
-    while (tasks != 0U) {
-        OSThread *t = OS_thread[LOG2(tasks)];                       // Indice da thread ativa na variáve                       
-        if (t->index == thread_running){
-            t->task_parameters.cost_relative--;    // Decrementa o custo se a tarefa estiver sendo executada
-        }                            
-        t->task_parameters.period_relative--;
-
-        // Verifica se um novo ciclo de período começou
-        if (t->task_parameters.period_dinamic == 0) {
-            // Reinicia os valores dinâmicos a partir dos absolutos
-            t->task_parameters.cost_dinamic = t->task_parameters.cost_absolute;
-            t->task_parameters.deadline_dinamic = t->task_parameters.deadline_absolute;
-            t->task_parameters.period_dinamic = t->task_parameters.period_absolute;
-        }
-
-        // Atualiza a máscara para verificar a próxima tarefa
-        tasks &= ~(1U << (t->index - 1U));
-    }
-}
+//void(void){}
 
 // ------------------------- END ESPECIFIC FUNCTIONS --------------------------
 
 void OS_sched(void) {
-    /* choose the next thread to execute... */
+    /* Escolhe a próxima thread para executar */
     OSThread *next;
-    if ( thread_running == 0U) { /* idle condition? */
-        next = OS_thread[0];    /* the idle thread */
+    if (OS_readySet == 0U) { /* condição de idle? */
+        next = OS_thread[0]; /* a thread de idle */
     }
     else {
-        next = OS_thread[thread_running];
+        uint32_t bit = OS_readySet & -OS_readySet;    // Isola o bit 1 mais à direita (Maior prioridade é o menor período)
+        next = OS_thread[LOG2(bit)];                  // Obtém a thread correspondente
         Q_ASSERT(next != (OSThread *)0);
     }
-
-    /* trigger PendSV, if needed */
+    /* Trigger PendSV, se necessário */
     if (next != OS_curr) {
-        OS_next = next;
-        //*(uint32_t volatile *)0xE000ED04 = (1U << 28);
-        SCB->ICSR |= SCB_ICSR_PENDSVSET_Msk;
+        OS_next = next;                     // Atualiza a variável global next caso seja diferente da atual
+        SCB->ICSR |= SCB_ICSR_PENDSVSET_Msk; // PendSV para mudar contexto
         __asm volatile("dsb");
-//        __asm volatile("isb");
+        // __asm volatile("isb");
     }
     /*
      * DSB - whenever a memory access needs to have completed before program execution progresses.
@@ -156,7 +117,7 @@ void OS_run(void) {
     OS_onStartup();
 
     __disable_irq();
-    OS_redirect_index();
+
     OS_sched();
     __enable_irq();
 
@@ -164,50 +125,54 @@ void OS_run(void) {
     Q_ERROR();
 }
 
-void OS_tick(void) {
-    uint32_t workingSet = OS_delayedSet;
-    while (workingSet != 0U) {
-        OSThread *t = OS_thread[LOG2(workingSet)];
+void OS_tick(void) {                                            //Decrementa o que tá em delay
+    uint32_t workingSet = OS_delayedSet & -OS_delayedSet;       // ----------------------------------------------------- Mexendo na Delayset
+    while (workingSet != 0U) {                                  //Enquanto tiver tarefa em delay
+        OSThread *tdelay = OS_thread[LOG2(workingSet)];         //Pega a mais a esquerda
         uint32_t bit;
-        Q_ASSERT((t != (OSThread *)0) && (t->timeout != 0U));
+        Q_ASSERT((tdelay != (OSThread *)0) && (tdelay->paramets.period_relative != 0U));
 
-        bit = (1U << (t->prio - 1U));
-        --t->timeout;
-        if (t->timeout == 0U) {
-            OS_readySet   |= bit;  /* insert to set */
-            OS_delayedSet &= ~bit; /* remove from set */
+        bit = (1U << (tdelay->prio - 1U));                      // Desloca 1 para esquerda (t->prio) casas
+        --tdelay->paramets.period_relative;                     // Decrementa o paramets.period_relative da tarefa t = workset = tarefa no OSdelayed
+
+        if(tdelay->paramets.cost_relative > 0){
+            tdelay->paramets.cost_relative--;
         }
-        workingSet &= ~bit; /* remove from working set */
+        if (tdelay->paramets.period_relative == 0U) {           // Se o paramets.period_relative zerar
+            OS_readySet   |= bit;  /* insert to set */          // Põe ela no pronto
+            OS_delayedSet &= ~bit; /* remove from set */        // Retira ela do Delay
+        }
+        workingSet &= ~bit; /* remove from working set */       // Para Redefinir o workingset
     }
-    
-    uint32_t tasks = OS_readySet; 
+
+    uint32_t tasks = OS_readySet;                               // ------------------------------------------------------ Mexendo na Readyset
     while (tasks != 0U) {
-        OSThread *t = OS_thread[LOG2(tasks)];                       // Obtém a próxima thread a partir do bit set mais alto
-        
-        if (t->index == thread_running){                            // Se a tarefa está em execução, decrementa o custo
-            if (t->TaskParamets.cost_relative > 0)
-                t->TaskParamets.cost_relative--;
+        OSThread *tready = OS_thread[LOG2(tasks)];              // Obtém a próxima thread a partir do bit set mais alto
+
+        if (tready->index == OS_curr->index){                   // Se a tarefa está em execução, decrementa o custo
+            if (tready->paramets.cost_relative > 0)             // E se o custo não zerou, decremeta o custo
+                tready->paramets.cost_relative--;
         }
-        if (t->TaskParamets.period_relative > 0)
-            t->TaskParamets.period_relative--;
-        if (t->TaskParamets.period_relative == 0){                  // Reinicia os parâmetros dinâmicos se um novo ciclo de período começou
-            t->TaskParamets.cost_relative = t->TaskParamets.cost_absolute;
-            t->TaskParamets.period_relative = t->TaskParamets.period_absolute;
+        if (tready->paramets.period_relative > 0) {             // Decremento do período
+                tready->paramets.period_relative--;
+            }
+        if (tready->paramets.period_relative == 0){             // Reajuste de periodo e custo relativo, como absoluto novamente, ao fim do periodo relativo
+            tready->paramets.period_relative = tready->paramets.period_abs;
+            tready->paramets.cost_relative = tready->paramets.cost_abs;
         }
-        tasks &= ~(1U << (t->index - 1U));                          // Atualiza a máscara para verificar a próxima tarefa
+        tasks &= ~(1U << (tready->index - 1U));                 // Atualiza a máscara para verificar a próxima tarefa (verificar adição a direita ou a esquerda)
     }
-
-
 }
 
-void OS_delay(uint32_t ticks) {
+//n É usado nessa implementaçãp
+void OS_delay_RM(uint32_t ticks) {
     uint32_t bit;
     __asm volatile ("cpsid i");
 
     /* never call OS_delay from the idleThread */
     Q_REQUIRE(OS_curr != OS_thread[0]);
 
-    OS_curr->timeout = ticks;
+    OS_curr->paramets.period_relative = ticks;
     bit = (1U << (OS_curr->prio - 1U));
     OS_readySet &= ~bit;
     OS_delayedSet |= bit;

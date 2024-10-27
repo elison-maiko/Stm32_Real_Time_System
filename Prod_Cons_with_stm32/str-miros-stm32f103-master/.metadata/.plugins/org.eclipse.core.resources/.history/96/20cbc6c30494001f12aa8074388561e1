@@ -1,0 +1,85 @@
+#include <stdint.h>
+#include <stdlib.h>
+#include "miros.h"
+
+#define STACK_SIZE 40  /* Tamanho da pilha para cada thread */
+#define N_TAREFAS 3
+
+/** Estrutura de controle de thread **/
+struct threads {
+    OSThread threadCB;
+    uint32_t stack[STACK_SIZE];
+};
+
+uint8_t now = 0;
+
+/* Definindo as funções específicas para cada tarefa */
+void task1() {
+    while(1) {
+        now = 1;
+    }
+}
+
+void task2() {
+    while(1) {
+        now = 2;
+    }
+}
+
+void task3() {
+    while(1) {
+        now = 3;
+    }
+}
+
+
+
+int main() {
+	uint32_t stack_idleThread[40];  /* Pilha do thread inativo */
+    struct threads tasks[N_TAREFAS];
+
+   /* Tarefas com custos e períodos diferentes*/
+    uint32_t tarefas[N_TAREFAS][2] = {
+        {20, 60}, // T1 Custo e Período
+        {20, 80}, // T2  ''
+        {20, 100} // T3  ''
+    };
+
+    // start the OS
+    OS_init(stack_idleThread, sizeof(stack_idleThread));
+
+    /* Funções de tarefas associadas*/
+    void (*taskFunctions[N_TAREFAS])() = {task1, task2, task3};       // Gambiarra para apontar taskfunction[i] para task, Funciona>>>>>
+
+    for (int i = 0; i < N_TAREFAS; i++) {
+        tasks[i].threadCB.paramets.cost_abs = tarefas[i][0];          // Custo
+        tasks[i].threadCB.paramets.cost_relative = tarefas[i][0];     // Custo
+        tasks[i].threadCB.paramets.period_abs = tarefas[i][1];        // Período
+        tasks[i].threadCB.paramets.period_relative = tarefas[i][1];   // Período
+    }
+
+    /* Verifica se as tarefas são escalonáveis usando o RTA */
+    if (!is_schedulable_RTA(tasks, N_TAREFAS)) {
+        return 1;                                // Encerrar o programa se não for escalonável
+    }
+
+    /* Inicia cada tarefa */
+    for (int i = 0; i < N_TAREFAS; i++) {
+        OSThread_start(&tasks[i].threadCB,       // Controle da thread
+                       i,                        // Prioridade da thread errada para teste
+                       taskFunctions[i],         // Função da tarefa
+                       tasks[i].stack,           // Pilha da thread
+                       sizeof(tasks[i].stack));  // Tamanho da pilha
+    }
+
+    OS_run();
+}
+
+/*
+Resta faazer:
+    Diminuição dos custos e periodos relativos no tick
+    redefinir custo e periodo relativo como absoluto assim que zerar
+
+
+*/
+

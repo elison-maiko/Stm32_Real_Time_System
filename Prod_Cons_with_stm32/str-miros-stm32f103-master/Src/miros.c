@@ -46,6 +46,7 @@ uint32_t OS_delayedSet; /* bitmask of threads that are delayed */
 
 #define LOG2(x) (32U - __builtin_clz(x))
 
+
 OSThread idleThread;
 void main_idleThread() {
     while (1) {

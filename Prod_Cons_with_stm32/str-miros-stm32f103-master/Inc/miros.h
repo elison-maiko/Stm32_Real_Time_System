@@ -31,18 +31,30 @@
 ****************************************************************************/
 #ifndef MIROS_H
 #define MIROS_H
+#define TICKS_PER_SEC 100U
+#include <stdbool.h>
+
+typedef struct{
+	uint32_t cost_abs;
+    uint32_t cost_relative;
+    uint32_t period_abs;
+    uint32_t period_relative;
+
+} Struct_TaskParamerts;
 
 /* Thread Control Block (TCB) */
 typedef struct {
     void *sp; /* stack pointer */
     uint32_t timeout; /* timeout delay down-counter */
     uint8_t prio; /* thread priority */
-    /* ... other attributes associated with a thread */
+    Struct_TaskParamerts *Paramets;
+    uint8_t setor_critico;
 } OSThread;
 
 typedef struct{
 	uint8_t valor_sem;
-} semaphore_t;
+    uint8_t max_buff;
+} semaphore;
 
 #define TICKS_PER_SEC 100U
 
@@ -76,8 +88,8 @@ void OSThread_start(
 
 /* ---------- Definicções do semaforo ----------*/
 
-void sem_init(semaphore_t *p_sem, uint8_t valor_init); /* Ponteiro p/ semaforo e o valor de inicio*/
-void sem_post(semaphore_t *p_sem);
-void sem_wait(semaphore_t *p_sem);
+void sem_init(semaphore *p_sem, uint8_t valor_init); /* Ponteiro p/ semaforo e o valor de inicio*/
+void sem_post(semaphore *p_sem);
+void sem_wait(semaphore *p_sem);
 
 #endif /* MIROS_H */

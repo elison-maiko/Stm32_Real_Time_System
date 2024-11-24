@@ -1,10 +1,21 @@
-23:26:39 **** Incremental Build of configuration Debug for project str-miros-stm32f103 ****
+21:42:29 **** Incremental Build of configuration Debug for project str-miros-stm32f103 ****
 make -j8 all 
+arm-none-eabi-gcc "../Src/miros.c" -mcpu=cortex-m3 -std=gnu11 -g3 -DDEBUG -DSTM32 -DSTM32F1 -DSTM32F103C8Tx -c -I"C:/Users/Elison Maiko/OneDrive/Documentos/Project_0/Stm32/pro_consu_cod/Drivers/STM32F1xx_HAL_Driver/Inc" -I"C:/Users/Elison Maiko/OneDrive/Documentos/Project_0/Stm32/pro_consu_cod/Drivers/CMSIS/Device/ST/STM32F1xx/Include" -I"C:/Users/Elison Maiko/OneDrive/Documentos/Project_0/Stm32/pro_consu_cod/Drivers/CMSIS/Include" -I"C:/Users/Elison Maiko/OneDrive/Documentos/Project_0/Stm32/pro_consu_cod/Inc" -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Src/miros.d" -MT"Src/miros.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Src/miros.o"
+arm-none-eabi-g++ -o "str-miros-stm32f103.elf" @"objects.list"   -mcpu=cortex-m3 -T"C:\Users\Elison Maiko\OneDrive\Documentos\Project_0\Stm32\pro_consu_cod\STM32F103C8TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="str-miros-stm32f103.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -lstdc++ -lsupc++ -Wl,--end-group
+C:/ST/STM32CubeIDE_1.16.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.12.3.rel1.win32_1.0.200.202406191623/tools/bin/../lib/gcc/arm-none-eabi/12.3.1/../../../../arm-none-eabi/bin/ld.exe: warning: str-miros-stm32f103.elf has a LOAD segment with RWX permissions
+Finished building target: str-miros-stm32f103.elf
+ 
 arm-none-eabi-size  str-miros-stm32f103.elf 
+arm-none-eabi-objdump -h -S str-miros-stm32f103.elf  > "str-miros-stm32f103.list"
    text	   data	    bss	    dec	    hex	filename
-   2496	     16	   2664	   5176	   1438	str-miros-stm32f103.elf
+   2696	     16	   3504	   6216	   1848	str-miros-stm32f103.elf
+arm-none-eabi-objcopy  -O binary str-miros-stm32f103.elf  "str-miros-stm32f103.bin"
 Finished building: default.size.stdout
+Finished building: str-miros-stm32f103.list
+ 
+Finished building: str-miros-stm32f103.bin
+ 
  
 
-23:26:40 Build Finished. 0 errors, 0 warnings. (took 906ms)
+21:42:34 Build Finished. 0 errors, 1 warnings. (took 5s.219ms)
 

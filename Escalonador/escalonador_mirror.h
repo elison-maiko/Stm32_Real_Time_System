@@ -36,8 +36,6 @@
 typedef struct{
 	uint32_t cost_abs;
     uint32_t cost_relative;
-	uint32_t deadline_abs;
-    uint32_t deadline_relative;
     uint32_t period_abs;
     uint32_t period_relative;
 
@@ -60,7 +58,7 @@ typedef struct {
 
 int is_schedulable_RTA(TaskParamets tasks[], uint8_t Ntasks);
 void OS_redirect_index(void);
-
+void OS_calculate_next_periodic_task_RM(void);
 
 // ---------------------------------------------------------------------------------
 

@@ -1,2 +1,4 @@
-buffer_prod
-buffer_cons
+current_task
+thread_task1
+thread_task2
+thread_task3

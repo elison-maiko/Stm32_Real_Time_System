@@ -1,0 +1,156 @@
+// Adicionar ao arquivo miros.h
+typedef enum {
+    TASK_PERIODIC,
+    TASK_APERIODIC
+} TaskType;
+
+typedef struct {
+    TaskType type;           // Tipo da tarefa (periódica ou aperiódica)
+    uint32_t arrival_time;   // Tempo de chegada para tarefas aperiódicas
+    uint32_t deadline;       // Deadline para tarefas aperiódicas
+    uint8_t is_active;       // Flag para indicar se tarefa aperiódica está ativa
+} TaskAttributes;
+
+// Modificar a estrutura OSThread para incluir os novos atributos
+typedef struct OSThread {
+    uint32_t sp;                    // stack pointer
+    uint8_t prio;                   // prioridade
+    TaskParamets paramets;          // parâmetros existentes
+    TaskAttributes attributes;      // novos atributos
+    struct OSThread *next;          // ponteiro para próxima tarefa aperiódica
+} OSThread;
+
+// Variáveis globais para gerenciar tarefas aperiódicas
+OSThread *aperiodic_queue_head = NULL;
+uint32_t current_time = 0;
+uint32_t polling_period = 100;  // Período do servidor de polling
+uint32_t polling_budget = 20;   // Orçamento do servidor de polling
+uint32_t remaining_budget = 20;
+
+// Função para inicializar uma tarefa aperiódica
+void OSThread_start_aperiodic(
+    OSThread *me,
+    uint8_t prio,
+    OSThreadHandler threadHandler,
+    void *stkSto, 
+    uint32_t stkSize,
+    uint32_t deadline
+) {
+    OSThread_start(me, prio, threadHandler, stkSto, stkSize);
+    me->attributes.type = TASK_APERIODIC;
+    me->attributes.arrival_time = current_time;
+    me->attributes.deadline = deadline;
+    me->attributes.is_active = 1;
+    
+    // Adicionar à fila de tarefas aperiódicas
+    if (aperiodic_queue_head == NULL) {
+        aperiodic_queue_head = me;
+    } else {
+        OSThread *temp = aperiodic_queue_head;
+        while (temp->next != NULL) {
+            temp = temp->next;
+        }
+        temp->next = me;
+    }
+}
+
+// Modificar a função OS_next_task_RM para incluir o servidor de polling
+void OS_next_task_RM(void) {
+    uint32_t highest_prio = 0U;
+    uint32_t tasks = OS_readySet;
+    
+    // Verifica se há orçamento disponível para tarefas aperiódicas
+    if (remaining_budget > 0 && aperiodic_queue_head != NULL) {
+        // Procura a tarefa aperiódica mais prioritária (EDF)
+        OSThread *best_aperiodic = NULL;
+        OSThread *current = aperiodic_queue_head;
+        uint32_t earliest_deadline = UINT32_MAX;
+        
+        while (current != NULL) {
+            if (current->attributes.is_active && 
+                current->attributes.deadline < earliest_deadline) {
+                earliest_deadline = current->attributes.deadline;
+                best_aperiodic = current;
+            }
+            current = current->next;
+        }
+        
+        if (best_aperiodic != NULL) {
+            OS_next = best_aperiodic;
+            return;
+        }
+    }
+    
+    // Se não houver tarefas aperiódicas ou não houver orçamento,
+    // continua com o escalonamento RM normal
+    while (tasks != 0U) {
+        uint32_t prio = LOG2_RIGHT(tasks);
+        OSThread *t = OS_thread[prio + 1];
+        
+        if (t != NULL && t->paramets.cost_relative > 0) {
+            if (t->attributes.type == TASK_PERIODIC &&
+                (t->paramets.period_abs < OS_thread[highest_prio]->paramets.period_abs 
+                 || highest_prio == 0)) {
+                highest_prio = prio + 1;
+            }
+        }
+        tasks &= ~(1U << prio);
+    }
+    
+    OS_next = OS_thread[highest_prio];
+}
+
+// Modificar a função OS_tick para atualizar o servidor de polling
+void OS_tick(void) {
+    current_time++;
+    
+    // Atualiza o orçamento do servidor de polling
+    if (current_time % polling_period == 0) {
+        remaining_budget = polling_budget;
+    }
+    
+    // Resto do código original do OS_tick
+    uint32_t workingSet = OS_delayedSet;
+    
+    while (workingSet != 0U) {
+        uint32_t prio = LOG2_RIGHT(workingSet);
+        OSThread *t = OS_thread[prio + 1];
+        uint32_t bit = (1U << prio);
+        
+        if (t != NULL && t->paramets.period_relative != 0U) {
+            if (--t->paramets.period_relative == 0U) {
+                t->paramets.period_relative = t->paramets.period_abs;
+                t->paramets.cost_relative = t->paramets.cost_abs;
+                OS_readySet |= bit;
+                OS_delayedSet &= ~bit;
+            }
+        }
+        workingSet &= ~bit;
+    }
+    
+    // Atualiza tarefas prontas e consome orçamento do servidor de polling
+    workingSet = OS_readySet;
+    while (workingSet != 0U) {
+        uint32_t prio = LOG2_RIGHT(workingSet);
+        OSThread *t = OS_thread[prio + 1];
+        
+        if (t != NULL) {
+            if (t->paramets.cost_relative > 0) {
+                t->paramets.cost_relative--;
+                if (t->attributes.type == TASK_APERIODIC && remaining_budget > 0) {
+                    remaining_budget--;
+                }
+            }
+            if (t->paramets.cost_relative == 0) {
+                if (t->attributes.type == TASK_APERIODIC) {
+                    t->attributes.is_active = 0;
+                }
+                OS_readySet &= ~(1U << prio);
+                OS_delayedSet |= (1U << prio);
+            }
+        }
+        workingSet &= ~(1U << prio);
+    }
+    
+    OS_sched();
+}

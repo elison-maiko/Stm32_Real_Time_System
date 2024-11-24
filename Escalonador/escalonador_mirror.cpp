@@ -43,6 +43,7 @@ OSThread * volatile OS_next; /* pointer to the next thread to run */
 OSThread *OS_thread[32 + 1]; /* array of threads started so far */
 uint32_t OS_readySet; /* bitmask of threads that are ready to run */
 uint32_t OS_delayedSet; /* bitmask of threads that are delayed */
+uint32_t OS_curr->index;
 
 #define LOG2(x) (32U - __builtin_clz(x))
 
@@ -82,28 +83,57 @@ int is_schedulable_RTA(TaskParamets tasks[], uint8_t Ntasks) {
     }
     return 1;  // Todas as tarefas são escalonáveis
 }
-//void(void){}
+
+void OS_calculate_next_periodic_task_RM(void) {
+    uint8_t index_lowest_period = 0U;
+    uint32_t lowest_period;
+
+    uint32_t tasks = OS_readySet;
+
+    while (tasks != 0U) {
+
+        OSThread *t = OS_thread[LOG2(tasks)];
+
+        if (t->paramets.cost_relative > 0) {  // Verifica se a tarefa ainda possui execução restante
+            if (index_lowest_period == 0U) {  // Se for a primeira tarefa a ser verificada
+                index_lowest_period = t->index;
+                lowest_period = t->paramets.period_abs;
+            } else {
+                if (t->paramets.period_abs < lowest_period) {  // Verifica se a tarefa possui o menor período
+                    index_lowest_period = t->index;
+                    lowest_period = t->paramets.period_abs;
+                } else if (t->paramets.period_abs == lowest_period) {
+                    if (t->index == OS_curr->index) {  // Em caso de empate, mantém a tarefa atual
+                        index_lowest_period = t->index;
+                        lowest_period = t->paramets.period_abs;
+                    }
+                }
+            }
+        }
+        tasks &= ~(1U << (t->index - 1U)); // Remove a tarefa do conjunto para seguir para a próxima
+    }
+
+    OS_curr->index = index_lowest_period;  // Define a próxima tarefa a ser executada
+}
+
+
 
 // ------------------------- END ESPECIFIC FUNCTIONS --------------------------
 
 void OS_sched(void) {
-    /* Escolhe a próxima thread para executar */
+    OS_calculate_next_periodic_task_RM();
+
     OSThread *next;
-    if (OS_readySet == 0U) { /* condição de idle? */
-        next = OS_thread[0]; /* a thread de idle */
+    if (OS_curr->index == 0U) { /* idle condition? */
+        next = OS_thread[0]; /* the idle thread */
     }
-    else {
-        uint32_t bit = OS_readySet & -OS_readySet;    // Isola o bit 1 mais à direita (Maior prioridade é o menor período)
-        next = OS_thread[LOG2(bit)];                  // Obtém a thread correspondente
-        Q_ASSERT(next != (OSThread *)0);
-    }
-    /* Trigger PendSV, se necessário */
+
     if (next != OS_curr) {
         OS_next = next;                     // Atualiza a variável global next caso seja diferente da atual
         SCB->ICSR |= SCB_ICSR_PENDSVSET_Msk; // PendSV para mudar contexto
         __asm volatile("dsb");
-        // __asm volatile("isb");
     }
+
     /*
      * DSB - whenever a memory access needs to have completed before program execution progresses.
      * ISB - whenever instruction fetches need to explicitly take place after a certain point in the program,

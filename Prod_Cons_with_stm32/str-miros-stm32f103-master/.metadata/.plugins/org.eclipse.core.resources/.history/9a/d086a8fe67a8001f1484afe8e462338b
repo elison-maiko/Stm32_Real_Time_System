@@ -1,0 +1,85 @@
+#include <stdint.h>
+#include <stdlib.h>
+#include <time.h>
+#include "miros.h"
+
+#define C1 200
+#define T1 800
+#define C2 200
+#define T2 600
+#define BSPRIO 4
+
+#define STACK_SIZE 256
+uint32_t stack_idleThread[STACK_SIZE/4];
+uint32_t stack_task1[STACK_SIZE/4];
+uint32_t stack_task2[STACK_SIZE/4];
+uint32_t stack_BS[STACK_SIZE/4];
+
+
+// Variável para monitoramento 
+uint8_t current_task = 0;
+
+// Declaração das threads
+OSThread thread_task1;
+OSThread thread_task2;
+OSThread thread_task3;
+OSThread Backgoround_Server;
+
+semaphore_t aperiodic_sem;
+
+// Definição das Tasks
+void task1() {
+    while(1) {
+        current_task = 1;
+        // Simula trabalho da task
+        for(volatile int i = 0; i < C1; i++) {
+            __asm("nop");
+        }
+    }
+}
+
+void task2() {
+    while(1) {
+        current_task = 2;
+        for(volatile int i = 0; i < C2; i++) {
+            __asm("nop");
+        }
+    }
+}
+
+void Function_Back_Server(void) {
+    while (1) {
+        sem_wait(&aperiodic_sem);
+        for (volatile uint32_t i = 0; i < 1000; i++);
+    }
+}
+
+int main() {
+    // Inicializa o sistema operacional com a idle thread
+    OS_init(stack_idleThread, sizeof(stack_idleThread));
+    sem_init(&aperiodic_sem, 0);
+    // Configura thread_task1 (maior prioridade - menor período)
+    thread_task1.paramets.period_abs = T1;
+    thread_task1.paramets.period_relative = T1;
+    thread_task1.paramets.cost_abs = C1;
+    thread_task1.paramets.cost_relative = C1;
+    thread_task1.index = 1;  // Adiciona índice para identificação
+
+    // Configura thread_task2 (prioridade média)
+    thread_task2.paramets.period_abs = T2;
+    thread_task2.paramets.period_relative = T2;
+    thread_task2.paramets.cost_abs = C2;
+    thread_task2.paramets.cost_relative = C2;
+    thread_task2.index = 2;  // Adiciona índice para identificação
+
+
+    // Inicia as threads (prioridade baseada no período - RMA)
+    OSThread_start(&thread_task1, 1, &task1, stack_task1, sizeof(stack_task1));
+    OSThread_start(&thread_task2, 2, &task2, stack_task2, sizeof(stack_task2));
+    OSThread_start(&Backgoround_Server, BSPRIO, &Function_Back_Server, stack_BS, sizeof(stack_BS));
+
+    OS_run();
+
+    // Nunca deve chegar aqui
+    return 0;
+}

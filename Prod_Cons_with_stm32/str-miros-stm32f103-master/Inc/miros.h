@@ -64,8 +64,6 @@ typedef struct{
     uint8_t max_buffer;
 } semaphore;
 
-#define TICKS_PER_SEC 100U
-
 typedef void (*OSThreadHandler)();
 
 void OS_init(void *stkSto, uint32_t stkSize);
@@ -88,11 +86,16 @@ void OS_tick(void);
 /* callback to configure and start interrupts */
 void OS_onStartup(void);
 
-void OSThread_start(
+void OSThread_start_P(
     OSThread *me,
-    uint8_t prio, /* thread priority */
     OSThreadHandler threadHandler,
-    void *stkSto, uint32_t stkSize);
+    uint32_t custo,
+    uint32_t periodo,
+    void *stkSto, uint32_t stkSize)
+
+void att_paramets(OSThread *ME);
+void add_task(OSThread *ME);
+
 
 /* ---------- Definicções do semaforo ----------*/
 

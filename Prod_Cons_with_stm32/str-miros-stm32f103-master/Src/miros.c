@@ -40,13 +40,16 @@ Q_DEFINE_THIS_FILE
 OSThread * volatile OS_curr; /* pointer to the current thread */
 OSThread * volatile OS_next; /* pointer to the next thread to run */
 
-OSThread *OS_thread[32 + 1]; /* array of threads started so far */
-uint32_t OS_readySet; /* bitmask of threads that are ready to run */
-uint32_t OS_delayedSet; /* bitmask of threads that are delayed */
-uint8_t N_tasks_P = 0;
+OSThread *OS_thread[32 + 1]; /* array of periodic threads started so far */
+OS_thread *OS_ThreadAP[32+1];/* array of aperiodic threads started so far */
+uint32_t OS_readySet;        /* bitmask of periodic threads that are ready to run */
+uint32_t OS_delayedSet;      /* bitmask of periodic threads that are delayed */
+uint32_t OS_readySetAP;      /* bitmask of aperiodic threads that are ready to run */
+uint8_t N_tasks_P = 0;       
+uint8_t N_tasks_AP = 0;
 
 #define LOG2(x) (32U - __builtin_clz(x))
-
+#define LOG2RIGTH(x) (__builtin_clz(x))
 
 OSThread idleThread;
 void main_idleThread() {
@@ -69,11 +72,15 @@ void OS_init(void *stkSto, uint32_t stkSize) {
 void OS_sched(void) {
     /* choose the next thread to execute... */
     OSThread *next;
-    if (OS_readySet == 0U) { /* idle condition? */
-        next = OS_thread[0]; /* the idle thread */
+    index_periodic = LOG2(OS_readySet);
+    index_aperiodic = LOG2(OS_readySetAP);
+    if (index_periodic == 0U) {                     /* idle condition? -> Sem tarefa periodicas prontas */
+        if(index_aperiodic == 0U)                   /* Verificar tarefas aperiodicas prontas */
+            next = OS_threadAP[index_aperiodic];    /* Escaolona tarefa aperiodica pronta, apontando para o bitmask aperiodico com lista aperiodica */
+        next = OS_thread[0];                        /* the idle thread */
     }
     else {
-        next = OS_thread[LOG2(OS_readySet)];
+        next = OS_thread[index_periodic];
         Q_ASSERT(next != (OSThread *)0);
     }
 
@@ -104,38 +111,21 @@ void OS_run(void) {
     Q_ERROR();
 }
 
-void OS_tick(void) {
-    uint32_t workingSet = OS_delayedSet;
-    while (workingSet != 0U) {
-        OSThread *t = OS_thread[LOG2(workingSet)];
-        uint32_t bit;
-        Q_ASSERT((t != (OSThread *)0) && (t->timeout != 0U));
-
-        bit = (1U << (t->prio - 1U));
-        --t->timeout;
-        if (t->timeout == 0U) {
-            OS_readySet   |= bit;  /* insert to set */
-            OS_delayedSet &= ~bit; /* remove from set */
-        }
-        workingSet &= ~bit; /* remove from working set */
-    }
-}
-
-void OS_delay(uint32_t ticks) {
-    uint32_t bit;
-    __asm volatile ("cpsid i");
-
-    /* never call OS_delay from the idleThread */
-    Q_REQUIRE(OS_curr != OS_thread[0]);
-
-    OS_curr->timeout = ticks;
-    bit = (1U << (OS_curr->prio - 1U));
-    OS_readySet &= ~bit;
-    OS_delayedSet |= bit;
+void OS_wait_next_period(){
+    __disable_irq();
+    uint8_t bit = (1U << (OS_curr->prio - 1U));
+    OS_readySet   &= ~bit;                      /* insert to set */
+    OS_delayedSet |= bit;                       /* remove from set */
     OS_sched();
-    __asm volatile ("cpsie i");
+    __enable_irq();
 }
 
+/* Função de atualização de parametos relativos */
+void att_paramets(OSThread *ME){
+    ME->Paramets.cost_relative = Me->Paramets.cost_abs;
+    Me->Paramets.period_relative = ME->Paramets.period_abs;
+}
+/* Função de Inserção de tasks com prioridade RM */
 void add_task(OSThread *ME) {
     uint8_t inserted = 0;
     /* CORAÇÃO DO ESCALONADOR RM */
@@ -164,6 +154,50 @@ void add_task(OSThread *ME) {
             OS_tasks[N_tasks_P]->prio = N_tasks_P;                              /* Prioridade igual à posição (última posição) */
         }
     }
+}
+void OS_tick(void) {
+    /* Função Original pra decremento no delayset */
+    uint32_t workingSet = OS_delayedSet;
+    while (workingSet != 0U) {
+        OSThread *t = OS_thread[LOG2(workingSet)];
+        uint32_t bit;
+        Q_ASSERT((t != (OSThread *)0) && (t->timeout != 0U));
+
+        bit = (1U << (t->prio - 1U));
+        --t->timeout;
+        if (t->timeout == 0U) {
+            OS_readySet   |= bit;   /* insert to set */
+            OS_delayedSet &= ~bit;  /* remove from set */
+        }
+        workingSet &= ~bit;         /* remove from working set */
+    }
+    /* Decremento de variaveis da thread*/
+    for (uint8_t i = 0; i < N_tasks_P; i++){
+        OS_thread *task = OS_thread[i+1];
+        task->Paramets.period_relative --;
+        task->Paramets.cost_relative ---;           /* Será q preciso desse cara ? */
+        if (task->Paramets.cost_relative == 0 ){    /* Teoricamente, no pior dos casos o periodo e o custo finalizando juntos, considerando deadline=periodo */
+            uint32_t bit = (1U << (t->prio - 1U));  /* Mas se o custo acabar antes do periodo */
+            OS_readySet   |= bit;                   /* insert to set */
+            OS_delayedSet &= ~bit;      /* remove from set */
+            att_custos(task);
+        }
+    }
+}
+
+void OS_delay(uint32_t ticks) {
+    uint32_t bit;
+    __asm volatile ("cpsid i");
+
+    /* never call OS_delay from the idleThread */
+    Q_REQUIRE(OS_curr != OS_thread[0]);
+
+    OS_curr->timeout = ticks;
+    bit = (1U << (OS_curr->prio - 1U));
+    OS_readySet &= ~bit;
+    OS_delayedSet |= bit;
+    OS_sched();
+    __asm volatile ("cpsie i");
 }
 
 /* Receber Periodo e Converter Periodo em PRIO*/
@@ -217,14 +251,60 @@ void OSThread_start_P(
 
     me->Paramets.cost_abs = custo;
     me->Paramets.cost_relative = custo;
-    me->Paramets.period_abs = periodo;
-    me->Paramets.period_relative = periodo;
+    att_paramets(me);
     /* Chamada da função que adiciona a task no seu lugar devido */
     add_task(me);
 
     /* make the thread ready to run */
     if (me->prio > 0U) {
         OS_readySet |= (1U << (me->prio - 1U));
+    }
+}
+
+void OSThread_start_AP(OSThread *me,
+    OSThreadHandler threadHandler,
+    void *stkSto, uint32_t stkSize){
+
+    uint32_t *sp = (uint32_t *)((((uint32_t)stkSto + stkSize) / 8) * 8);
+    uint32_t *stk_limit;
+
+    *(--sp) = (1U << 24);  /* xPSR */
+    *(--sp) = (uint32_t)threadHandler; /* PC */
+    *(--sp) = 0x0000000EU; /* LR  */
+    *(--sp) = 0x0000000CU; /* R12 */
+    *(--sp) = 0x00000003U; /* R3  */
+    *(--sp) = 0x00000002U; /* R2  */
+    *(--sp) = 0x00000001U; /* R1  */
+    *(--sp) = 0x00000000U; /* R0  */
+    /* additionally, fake registers R4-R11 */
+    *(--sp) = 0x0000000BU; /* R11 */
+    *(--sp) = 0x0000000AU; /* R10 */
+    *(--sp) = 0x00000009U; /* R9 */
+    *(--sp) = 0x00000008U; /* R8 */
+    *(--sp) = 0x00000007U; /* R7 */
+    *(--sp) = 0x00000006U; /* R6 */
+    *(--sp) = 0x00000005U; /* R5 */
+    *(--sp) = 0x00000004U; /* R4 */
+
+    /* save the top of the stack in the thread's attibute */
+    me->sp = sp;
+
+    /* round up the bottom of the stack to the 8-byte boundary */
+    stk_limit = (uint32_t *)(((((uint32_t)stkSto - 1U) / 8) + 1U) * 8);
+
+    /* pre-fill the unused part of the stack with 0xDEADBEEF */
+    for (sp = sp - 1U; sp >= stk_limit; --sp) {
+        *sp = 0xDEADBEEFU;
+    }
+
+    OS_ThreadAP[N_tasks_AP] = me;
+    OS_ThreadAP[N_tasks_AP]->prio = N_tasks_AP;
+    OS_ThreadAP[N_tasks_AP]->setor_critico = N_tasks_AP;
+
+    N_tasks_AP++;
+
+    if (me->prio > 0U) {
+        OS_readySetAP |= (1U << (me->prio - 1U));       /* Lansa a tredi ap nu bit mascarado */
     }
 }
 

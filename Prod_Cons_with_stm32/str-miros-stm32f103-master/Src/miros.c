@@ -43,6 +43,7 @@ OSThread * volatile OS_next; /* pointer to the next thread to run */
 OSThread *OS_thread[32 + 1]; /* array of threads started so far */
 uint32_t OS_readySet; /* bitmask of threads that are ready to run */
 uint32_t OS_delayedSet; /* bitmask of threads that are delayed */
+uint8_t N_tasks_P = 0;
 
 #define LOG2(x) (32U - __builtin_clz(x))
 
@@ -59,7 +60,7 @@ void OS_init(void *stkSto, uint32_t stkSize) {
     *(uint32_t volatile *)0xE000ED20 |= (0xFFU << 16);
 
     /* start idleThread thread */
-    OSThread_start(&idleThread,
+    OSThread_start_P(&idleThread,
                    0U, /* idle thread priority */
                    &main_idleThread,
                    stkSto, stkSize);
@@ -95,7 +96,6 @@ void OS_sched(void) {
 void OS_run(void) {
     /* callback to configure and start interrupts */
     OS_onStartup();
-
     __disable_irq();
     OS_sched();
     __enable_irq();
@@ -136,10 +136,42 @@ void OS_delay(uint32_t ticks) {
     __asm volatile ("cpsie i");
 }
 
-void OSThread_start(
+void add_task(OSThread *ME) {
+    uint8_t inserted = 0;
+    /* CORAÇÃO DO ESCALONADOR RM */
+    /* IDLE */
+    if (N_tasks_P == 0) {
+    OS_tasks[0] = ME;
+    OS_tasks[0]->prio = 0;  
+    } 
+    else {
+        uint8_t inserted = 0;
+        for (uint8_t i = 0; i < N_tasks_P; i++) {                               /* Itera pelas tarefas já existentes para encontrar a posição correta */
+            if (OS_tasks[i]->Paramets.period_abs > ME->Paramets.period_abs) {   /* Verifica se o período absoluto da nova tarefa é menor que o da tarefa i */
+                for (uint8_t j = N_tasks_P; j > i; j--) {                       
+                    OS_tasks[j] = OS_tasks[j - 1];                              /* Move as tarefas existentes para a direita para abrir espaço para a nova tarefa */
+                    OS_tasks[j]->prio = j;                                      /* Atualiza a prioridade das tarefas movidas */
+                }
+                OS_tasks[i] = ME;                                               /* Insere a nova tarefa na posição correta */
+                OS_tasks[i]->prio = i;                                          /* Define a prioridade da nova tarefa (posição i) */
+                inserted = 1;                                                   /* Marca que a tarefa foi inserida */
+                break;                                                          /* Sai do loop, pois a tarefa já foi inserida */
+            }
+        }
+        /* Caso a nova tarefa tenha o maior período, ela é inserida no final da lista */
+        if (!inserted) {
+            OS_tasks[N_tasks_P] = ME;
+            OS_tasks[N_tasks_P]->prio = N_tasks_P;                              /* Prioridade igual à posição (última posição) */
+        }
+    }
+}
+
+/* Receber Periodo e Converter Periodo em PRIO*/
+void OSThread_start_P(
     OSThread *me,
-    uint8_t prio, /* thread priority */
     OSThreadHandler threadHandler,
+    uint32_t custo,
+    uint32_t periodo,
     void *stkSto, uint32_t stkSize)
 {
     /* round down the stack top to the 8-byte boundary
@@ -147,12 +179,12 @@ void OSThread_start(
     */
     uint32_t *sp = (uint32_t *)((((uint32_t)stkSto + stkSize) / 8) * 8);
     uint32_t *stk_limit;
+    
+    /* Ntasks  tem q ser menor q o tamanho de Os_tasks eeeee  O espaço do indice deve estar vazio*/
+    Q_REQUIRE((N_tasks_P + 1 < Q_DIM(OS_tasks) - 1) && (OS_tasks[N_tasks_P + 1] == (OSThread *)0));
 
-    /* priority must be in ragne
-    * and the priority level must be unused
-    */
-    Q_REQUIRE((prio < Q_DIM(OS_thread))
-              && (OS_thread[prio] == (OSThread *)0));
+    if (threadHandler != &main_idleThread) 
+        N_tasks_P++;
 
     *(--sp) = (1U << 24);  /* xPSR */
     *(--sp) = (uint32_t)threadHandler; /* PC */
@@ -183,36 +215,38 @@ void OSThread_start(
         *sp = 0xDEADBEEFU;
     }
 
-    /* register the thread with the OS */
-    OS_thread[prio] = me;
-    me->prio = prio;
+    me->Paramets.cost_abs = custo;
+    me->Paramets.cost_relative = custo;
+    me->Paramets.period_abs = periodo;
+    me->Paramets.period_relative = periodo;
+    /* Chamada da função que adiciona a task no seu lugar devido */
+    add_task(me);
+
     /* make the thread ready to run */
-    if (prio > 0U) {
-        OS_readySet |= (1U << (prio - 1U));
+    if (me->prio > 0U) {
+        OS_readySet |= (1U << (me->prio - 1U));
     }
 }
 
-
-void sem_init(semaphore_t *p_sem, uint8_t valor_init) {
+void sem_init(semaphore *p_sem, uint8_t valor_init, uint8_t max) {
 	Q_ASSERT(p_sem != NULL);
-	p_sem->valor_sem = valor_init;
-	/* valor_init da criação do semaforo é atribuido a variavel valor_sem, da struct*/
+	p_sem->valor_sem = valor_init;      /* valor_init da criação do semaforo é atribuido a variavel valor_sem, da struct*/
+    p_sem->max_buffer = max;            /* valor maximo do buffer */
 }
 
-void sem_post(semaphore_t *p_sem){
+void sem_post(semaphore *p_sem){
 	__disable_irq();
-	p_sem->valor_sem++; /*Incremento entre interrupção, para proteçao*/
+	p_sem->valor_sem++; // AJEITAR ESTRUTURA DE NPP
 	__enable_irq();
 }
 
-void sem_wait(semaphore_t *p_sem){
+void sem_wait(semaphore *p_sem){
 	__disable_irq();
-	while(p_sem->valor_sem <= 0){ /*Enquanto o valor do semaforo for 0 não é possivel decrementar*/
+	while(p_sem->valor_sem <= 0){ 
 		__enable_irq();
-		OS_delay(1U); /*Reabilita a interrupção e gera delay para outra thread incrementar o valor do semaforo*/
-		__disable_irq(); /*disabilita interrupção para outra verificação do while*/
+		OS_delay(1U);     // AJUSTAR LOGICA DE  NPP
+		__disable_irq(); 
 	}
-	/*Assim que valor_sem > 0, ocorre o decremento*/
 	p_sem->valor_sem --;
 	__enable_irq();
 }

@@ -7,37 +7,37 @@
 #define T1 800
 #define C2 200
 #define T2 600
-#define BSPRIO 4
 
-/** Estrutura de controle de thread **/
-struct threads {
-    OSThread threadCB;
-    uint32_t stack[STACK_SIZE];
-};
-
-
-semaphore_t Setor1;
-semaphore_t Setor2;
+uint32_t visual_paramet = 0;
+uint32_t atual_task = 0;
+semaphore Setor1;
+semaphore Setor2;
 
 
 void task1() {
     while(1) {
-        current_task = 1;
-        // Simula trabalho da task
-        for(volatile int i = 0; i < C1; i++) {
+        atual_task = 1;                        // Indica que task 1 está escalonada
+        for(volatile vizual = 0; i < C1; i++) {// Simula trabalho da task
             __asm("nop");
         }
     }
 }
-
-/** Função que simula um consumidor **/
-void consumidor() {
-    while (1) {
+void task2() {
+    while(1) {
+        atual_task = 2;                        // Indica que task 1 está escalonada
+        for(volatile vizual = 0; i < C2; i++) {// Simula trabalho da task
+            __asm("nop");
+        }
     }
 }
-
-struct threads produtorThread;
-struct threads consumidorThread;
+void APtask() {
+    while(1) {
+        atual_task = 10;                        // Indica que task 1 está escalonada
+        for(volatile vizual = 0; i < 1000; i++) {// Simula trabalho da task
+            __asm("nop");
+        }
+    }
+}
 
 int main() {
     uint32_t idleStack[STACK_SIZE];  /* Pilha do thread inativo */
@@ -45,13 +45,23 @@ int main() {
     /** Inicializa o sistema operacional **/
     OS_init(idleStack, sizeof(idleStack));
 
-    /** Inicializa os semáforos **/
-    sem_init(&buffer_prod, 1);  /* Espaço disponível no início */
-    sem_init(&buffer_cons, 1);  /* Nenhum item pronto inicialmente */
+    threads thread_task1;
+    threads thread_task2;
+    threads thread_taskAP;
 
-    /* Inicializa a thread do produtor*/
-    OSThread_start(&(produtorThread.threadCB), 1, &produtor, produtorThread.stack, sizeof(produtorThread.stack));
-    OSThread_start(&(consumidorThread.threadCB), 2, &consumidor, consumidorThread.stack, sizeof(consumidorThread.stack));
+    /* Inicializa a threads Periodicas -->> Ajustar OSCREAT*/
+    OSThread_start_P(&thread_task1.threadCB, &task1, C1, T1,thread_task1.stack, sizeof(thread_task1.stack));
+    OSThread_start_P(&thread_task2.threadCB, &task2, C2, T2,thread_task2.stack, sizeof(thread_task2.stack));
+
+    /* Inicializa a threads Aperiodicas -->> Ajustar OSCREAT */
+    /* FAZ SENTIDO INSERIR CUSTO E PERIODO? */
+    
+    /** Inicializa os semáforos **/
+    sem_init(&Setor1, 1, 1);  
+    sem_init(&Setor2, 1, 1);  
+
+    /* Inicializa a threads Periodicas -->> Ajustar OSCREAT*/
+
 
     OS_run();
 }

@@ -33,6 +33,7 @@
 #define MIROS_H
 #define TICKS_PER_SEC 100U
 #include <stdbool.h>
+#define STACK_SIZE 40
 
 typedef struct{
 	uint32_t cost_abs;
@@ -47,13 +48,20 @@ typedef struct {
     void *sp; /* stack pointer */
     uint32_t timeout; /* timeout delay down-counter */
     uint8_t prio; /* thread priority */
-    Struct_TaskParamerts *Paramets;
+    Struct_TaskParamerts Paramets;
     uint8_t setor_critico;
 } OSThread;
 
+/** Estrutura de controle de thread **/
+ typedef struct  {
+    OSThread threadCB;
+    uint32_t stack[STACK_SIZE];
+} threads;
+
+
 typedef struct{
 	uint8_t valor_sem;
-    uint8_t max_buff;
+    uint8_t max_buffer;
 } semaphore;
 
 #define TICKS_PER_SEC 100U
